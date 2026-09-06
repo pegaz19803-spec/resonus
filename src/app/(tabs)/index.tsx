@@ -225,11 +225,12 @@ function OctoMostListenedSection({ data }: { data?: OctoMostListenedTrack[] }) {
 
 function OctoTopNewReleasesSection({ data }: { data?: OctoTopNewRelease[] }) {
   const card = useShelfCard();
+  const t = useT();
   if (!data || data.length === 0) return null;
 
   return (
     <View style={styles.section}>
-      <Text style={styles.sectionTitle}>Top New Releases</Text>
+      <Text style={styles.sectionTitle}>{t('New releases')}</Text>
       <FlatList
         {...listPerf}
         horizontal
