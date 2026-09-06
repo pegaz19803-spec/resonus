@@ -58,6 +58,14 @@ import { listPerf } from '@/lib/listPerf';
 import { haptic } from '@/lib/haptics';
 import { bump } from '@/lib/perfLog';
 import { playShuffle } from '@/lib/playShuffle';
+import {
+  getOctoTopArtists,
+  getOctoMostListened,
+  getOctoTopNewReleases,
+  type OctoTopArtist,
+  type OctoMostListenedTrack,
+  type OctoTopNewRelease,
+} from '@/api/subsonic';
 
 /**
  * How wide a quick tile wants to be, in dp.
@@ -112,6 +120,126 @@ function QuickTile({
         </Text>
       </Pressable>
     </Link>
+  );
+}
+
+function OctoArtistCard({ item, width }: { item: OctoTopArtist; width: number }) {
+  const content = (
+    <Pressable style={{ width, gap: spacing.xs, alignItems: "center" }}>
+      <Cover uri={item.imageUrl ?? undefined} size={width} rounded />
+      <Text style={styles.octoTitle} numberOfLines={1}>{item.name}</Text>
+      <Text style={styles.octoSub} numberOfLines={1}>{item.playCount} plays</Text>
+    </Pressable>
+  );
+
+  return item.id ? <Link href={`/artist/${item.id}`} asChild>{content}</Link> : content;
+}
+
+function OctoAlbumCard({ item, width }: { item: OctoTopNewRelease; width: number }) {
+  const content = (
+    <Pressable style={{ width, gap: spacing.xs }}>
+      <Cover uri={item.coverUrl ?? undefined} size={width} />
+      <Text style={styles.octoTitle} numberOfLines={1}>{item.album}</Text>
+      <Text style={styles.octoSub} numberOfLines={1}>{item.artist}</Text>
+    </Pressable>
+  );
+
+  return item.id ? <Link href={`/album/${item.id}`} asChild>{content}</Link> : content;
+}
+
+function OctoSongCard({
+  item,
+  width,
+  onPress,
+}: {
+  item: OctoMostListenedTrack;
+  width: number;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable style={{ width, gap: spacing.xs }} onPress={onPress}>
+      <Cover uri={item.coverUrl ?? undefined} size={width} />
+      <Text style={styles.octoTitle} numberOfLines={1}>{item.title}</Text>
+      <Text style={styles.octoSub} numberOfLines={1}>{item.artist}</Text>
+    </Pressable>
+  );
+}
+
+function OctoTopArtistsSection({ data }: { data?: OctoTopArtist[] }) {
+  const { wide } = useScreenSize();
+  const width = wide ? ARTIST_SIZE_WIDE : ARTIST_SIZE;
+  if (!data || data.length === 0) return null;
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Najlepsi artyści</Text>
+      <FlatList
+        {...listPerf}
+        horizontal
+        data={data}
+        keyExtractor={(item, index) => item.id ?? `artist-${index}`}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.rowContent}
+        renderItem={({ item }) => <OctoArtistCard item={item} width={width} />}
+      />
+    </View>
+  );
+}
+
+function OctoMostListenedSection({ data }: { data?: OctoMostListenedTrack[] }) {
+  const card = useShelfCard();
+  const playQueue = usePlayerStore((s) => s.playQueue);
+  if (!data || data.length === 0) return null;
+
+  const songs = data.map((item) => ({
+    id: item.id,
+    title: item.title,
+    artist: item.artist,
+    album: item.album,
+    albumId: item.albumId ?? undefined,
+    coverArt: item.coverArt ?? undefined,
+    coverUrl: item.coverUrl ?? undefined,
+  })) as Song[];
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Najbardziej słuchane</Text>
+      <FlatList
+        {...listPerf}
+        horizontal
+        data={data}
+        keyExtractor={(item) => item.id}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.rowContent}
+        renderItem={({ item, index }) => (
+          <OctoSongCard
+            item={item}
+            width={card}
+            onPress={() => void playQueue(songs, index, "Najbardziej słuchane")}
+          />
+        )}
+      />
+    </View>
+  );
+}
+
+function OctoTopNewReleasesSection({ data }: { data?: OctoTopNewRelease[] }) {
+  const card = useShelfCard();
+  if (!data || data.length === 0) return null;
+
+  return (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>Top New Releases</Text>
+      <FlatList
+        {...listPerf}
+        horizontal
+        data={data}
+        keyExtractor={(item, index) => item.id ?? `release-${index}`}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.rowContent}
+        renderItem={({ item }) => <OctoAlbumCard item={item} width={card} />}
+      />
+    </View>
   );
 }
 
@@ -738,6 +866,21 @@ export default function HomeScreen() {
   bump('render · home');
   const auth = useAuthStore((s) => s.auth);
   const offline = useAuthStore((s) => s.offline);
+  const { data: octoTopArtists } = useQuery({
+    queryKey: ["octo", "topArtists"],
+    queryFn: () => getOctoTopArtists(auth!, 10),
+    enabled: !!auth && !offline,
+  });
+  const { data: octoMostListened } = useQuery({
+    queryKey: ["octo", "mostListened"],
+    queryFn: () => getOctoMostListened(auth!, 10),
+    enabled: !!auth && !offline,
+  });
+  const { data: octoTopNewReleases } = useQuery({
+    queryKey: ["octo", "topNewReleases"],
+    queryFn: () => getOctoTopNewReleases(auth!, 10),
+    enabled: !!auth && !offline,
+  });
   const bottomPad = useScreenBottomPadding();
   const scanning = useScanProgress((s) => s.phase !== 'idle');
   const queryClient = useQueryClient();
@@ -872,6 +1015,9 @@ export default function HomeScreen() {
         ) : (
           <>
             {showQuickGrid ? <QuickGrid /> : null}
+            <OctoTopArtistsSection data={octoTopArtists} />
+            <OctoMostListenedSection data={octoMostListened} />
+            <OctoTopNewReleasesSection data={octoTopNewReleases} />
 
             {/* Toggleable and reorderable rows (Settings → Personalization →
                 Home sections). «Recently played» doesn't exist offline. */}
@@ -982,6 +1128,16 @@ const styles = themed((colors) => ({
     marginBottom: spacing.md,
   },
   rowContent: { paddingHorizontal: spacing.lg, gap: spacing.md },
+  octoTitle: {
+    color: colors.text,
+    fontSize: fontSize.sm,
+    fontWeight: "600",
+    marginTop: spacing.xs,
+  },
+  octoSub: {
+    color: colors.textSecondary,
+    fontSize: fontSize.xs,
+  },
   scanPanel: {
     alignItems: 'center',
     gap: spacing.sm,

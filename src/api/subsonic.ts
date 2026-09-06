@@ -411,6 +411,63 @@ function buildUrl(
 
 const REQUEST_TIMEOUT_MS = 15000;
 
+async function octoRequest<T>(
+  auth: SubsonicAuth,
+  endpoint: string,
+  extra: Record<string, string | number | undefined> = {},
+): Promise<T> {
+  assertCanRequest(false);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  try {
+    const res = await fetch(buildUrl(auth, endpoint, extra), { signal: controller.signal });
+    if (!res.ok) throw new Error(`Octo request failed (${res.status})`);
+    return await res.json() as T;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+export type OctoTopArtist = {
+  id?: string | null;
+  name: string;
+  playCount: number;
+  imageUrl?: string | null;
+};
+
+export type OctoMostListenedTrack = {
+  id: string;
+  title: string;
+  artist: string;
+  album: string;
+  albumId?: string | null;
+  coverArt?: string | null;
+  coverUrl?: string | null;
+  sessions: number;
+  listenedSeconds: number;
+  classification: string;
+};
+
+export type OctoTopNewRelease = {
+  rank: number;
+  id?: string | null;
+  album: string;
+  artist: string;
+  coverUrl?: string | null;
+};
+
+export function getOctoTopArtists(auth: SubsonicAuth, limit = 10) {
+  return octoRequest<OctoTopArtist[]>(auth, "octoTopArtists.view", { limit });
+}
+
+export function getOctoMostListened(auth: SubsonicAuth, limit = 10) {
+  return octoRequest<OctoMostListenedTrack[]>(auth, "octoMostListened.view", { limit });
+}
+
+export function getOctoTopNewReleases(auth: SubsonicAuth, limit = 10) {
+  return octoRequest<OctoTopNewRelease[]>(auth, "octoTopNewReleases.view", { limit });
+}
+
 /** Makes a request and unwraps the Subsonic response. */
 /**
  * Subsonic request error. `network` distinguishes "server didn't respond"
